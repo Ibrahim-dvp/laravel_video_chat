@@ -1,10 +1,13 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import { Head } from "@inertiajs/vue3";
-import { ref, onMounted, watch, onBeforeUnmount } from "vue";
+import { ref, onMounted, onBeforeUnmount } from "vue";
 import { usePage } from "@inertiajs/vue3";
 import axios from "axios";
 import Peer from "peerjs";
+import Modal from "@/Components/Modal.vue";
+import PrimaryButton from "@/Components/PrimaryButton.vue";
+import DangerButton from "@/Components/DangerButton.vue";
 
 defineProps({
     auth: Object,
@@ -20,6 +23,10 @@ const remoteVideo = ref(null);
 const localVideo = ref(null);
 const isCalling = ref(false);
 const localStream = ref(null);
+const incomingCall = ref(null);
+const incomingEvent = ref(null);
+const isMuted = ref(false);
+const cameraOff = ref(false);
 
 const callUser = () => {
     axios.post(`/video-call/request/${selectedUser.value.id}`, {
@@ -30,11 +37,13 @@ const callUser = () => {
 };
 
 const endCall = () => {
-    peerCall.value.close();
-    localStream.value.getTracks().forEach((track) => track.stop());
+    peerCall.value?.close();
+    localStream.value?.getTracks().forEach((track) => track.stop());
     remoteVideo.value = null;
     localVideo.value = null;
     isCalling.value = false;
+    isMuted.value = false;
+    cameraOff.value = false;
 };
 
 const displayLocalVideo = () => {
@@ -47,6 +56,18 @@ const displayLocalVideo = () => {
         .catch((err) => {
             console.error("Error accessing media devices:", err);
         });
+};
+
+const toggleMic = () => {
+    if (!localStream.value) return;
+    localStream.value.getAudioTracks().forEach((t) => (t.enabled = !t.enabled));
+    isMuted.value = !isMuted.value;
+};
+
+const toggleCamera = () => {
+    if (!localStream.value) return;
+    localStream.value.getVideoTracks().forEach((t) => (t.enabled = !t.enabled));
+    cameraOff.value = !cameraOff.value;
 };
 
 const setSelectedUser = (user) => {
@@ -119,10 +140,8 @@ const connectWebSocket = () => {
     window.Echo.private(`video-call.${auth.user.id}`).listen(
         "RequestVideoCall",
         (e) => {
-            selectedUser.value = e.user.fromUser;
-            isCalling.value = true;
-            recipientAcceptCall(e);
-            displayLocalVideo();
+            incomingCall.value = e.user.fromUser;
+            incomingEvent.value = e;
         }
     );
 
@@ -130,7 +149,11 @@ const connectWebSocket = () => {
     window.Echo.private(`video-call.${auth.user.id}`).listen(
         "RequestVideoCallStatus",
         (e) => {
-            createConnection(e);
+            if (e.user.status === "accept") {
+                createConnection(e);
+            } else {
+                endCall();
+            }
         }
     );
 };
@@ -142,11 +165,48 @@ onMounted(() => {
 onBeforeUnmount(() => {
     window.Echo.leave(`video-call.${auth.user.id}`);
 });
+
+const acceptCall = () => {
+    if (!incomingEvent.value) return;
+    selectedUser.value = incomingCall.value;
+    isCalling.value = true;
+    recipientAcceptCall(incomingEvent.value);
+    displayLocalVideo();
+    incomingCall.value = null;
+    incomingEvent.value = null;
+};
+
+const declineCall = () => {
+    if (!incomingEvent.value) {
+        incomingCall.value = null;
+        return;
+    }
+    axios.post(
+        `/video-call/request/status/${incomingEvent.value.user.fromUser.id}`,
+        {
+            peerId: peer.id,
+            status: "deny",
+        }
+    );
+    incomingCall.value = null;
+    incomingEvent.value = null;
+};
 </script>
 
 <template>
     <Head title="Contacts" />
     <AuthenticatedLayout>
+        <Modal :show="Boolean(incomingCall)" @close="declineCall">
+            <div class="p-6">
+                <h2 class="text-lg font-medium text-gray-900">
+                    Incoming call from {{ incomingCall?.name }}
+                </h2>
+                <div class="mt-4 flex justify-end space-x-4">
+                    <PrimaryButton @click="acceptCall">Accept</PrimaryButton>
+                    <DangerButton @click="declineCall">Decline</DangerButton>
+                </div>
+            </div>
+        </Modal>
         <div
             class="h-screen flex bg-gray-100 mx-auto max-w-7xl sm:px-6 lg:px-8"
             style="height: 90vh"
@@ -203,13 +263,30 @@ onBeforeUnmount(() => {
                                 >
                                     Call
                                 </button>
-                                <button
-                                    v-if="isCalling"
-                                    @click="endCall"
-                                    class="ml-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                                >
-                                    End Call
-                                </button>
+                                <template v-else>
+                                    <button
+                                        @click="toggleMic"
+                                        class="ml-4 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                                    >
+                                        {{ isMuted ? "Unmute" : "Mute" }}
+                                    </button>
+                                    <button
+                                        @click="toggleCamera"
+                                        class="ml-2 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                                    >
+                                        {{
+                                            cameraOff
+                                                ? "Show Camera"
+                                                : "Hide Camera"
+                                        }}
+                                    </button>
+                                    <button
+                                        @click="endCall"
+                                        class="ml-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                                    >
+                                        End Call
+                                    </button>
+                                </template>
                             </div>
                         </div>
                     </div>
