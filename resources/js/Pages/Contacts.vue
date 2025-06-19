@@ -73,10 +73,44 @@ const toggleMic = () => {
     isMuted.value = !isMuted.value;
 };
 
-const toggleCamera = () => {
+const toggleCamera = async () => {
     if (!localStream.value) return;
-    localStream.value.getVideoTracks().forEach((t) => (t.enabled = !t.enabled));
     cameraOff.value = !cameraOff.value;
+
+    const videoSenders =
+        peerCall.value?.peerConnection
+            .getSenders()
+            .filter((s) => s.track && s.track.kind === "video") || [];
+
+    if (cameraOff.value) {
+        localStream.value.getVideoTracks().forEach((t) => {
+            t.enabled = false;
+            t.stop();
+            localStream.value.removeTrack(t);
+        });
+        videoSenders.forEach((sender) => sender.replaceTrack(null));
+    } else {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: false,
+            });
+            const newTrack = stream.getVideoTracks()[0];
+            localStream.value.addTrack(newTrack);
+            videoSenders.forEach((sender) => sender.replaceTrack(newTrack));
+
+            if (localVideo.value) {
+                const lvStream = localVideo.value.srcObject;
+                if (lvStream) {
+                    lvStream.addTrack(newTrack);
+                } else {
+                    localVideo.value.srcObject = new MediaStream([newTrack]);
+                }
+            }
+        } catch (err) {
+            console.error("Error toggling camera:", err);
+        }
+    }
 };
 
 const setSelectedUser = (user) => {
@@ -307,6 +341,109 @@ const declineCall = () => {
                                 >
                                     <button
                                         @click="toggleMic"
+                                        class="p-2 rounded-full bg-gray-200 hover:bg-gray-300"
+                                    >
+                                        <svg
+                                            v-if="!isMuted"
+                                            class="h-6 w-6"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M12 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3zm5 9a5 5 0 01-10 0m5 5v4m-4 0h8"
+                                            />
+                                        </svg>
+                                        <svg
+                                            v-else
+                                            class="h-6 w-6"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M15 10v1a3 3 0 01-3 3m-3-3V5a3 3 0 016 0v4m6 6l-6-6m-6 0L3 3m9 13v5m-4 0h8"
+                                            />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        @click="toggleCamera"
+                                        class="p-2 rounded-full bg-gray-200 hover:bg-gray-300"
+                                    >
+                                        <svg
+                                            v-if="!cameraOff"
+                                            class="h-6 w-6"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14V10z"
+                                            />
+                                            <rect
+                                                x="3"
+                                                y="6"
+                                                width="12"
+                                                height="12"
+                                                rx="2"
+                                                ry="2"
+                                            />
+                                        </svg>
+                                        <svg
+                                            v-else
+                                            class="h-6 w-6"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M3 3l18 18M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14V10z"
+                                            />
+                                            <rect
+                                                x="3"
+                                                y="6"
+                                                width="12"
+                                                height="12"
+                                                rx="2"
+                                                ry="2"
+                                            />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        @click="endCall"
+                                        class="p-2 rounded-full bg-red-500 text-white hover:bg-red-600"
+                                    >
+                                        <svg
+                                            class="h-6 w-6"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M3 15s2-2 9-2 9 2 9 2v3H3v-3z"
+                                            />
+                                        </svg>
+=======
                                         class="px-3 py-2 rounded-full bg-gray-200 hover:bg-gray-300"
                                     >
                                         {{ isMuted ? 'Unmute' : 'Mute' }}
@@ -322,6 +459,7 @@ const declineCall = () => {
                                         class="px-3 py-2 rounded-full bg-red-500 text-white hover:bg-red-600"
                                     >
                                         End
+
                                     </button>
                                 </div>
                             </div>
