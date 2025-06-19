@@ -5,14 +5,35 @@ import { ref, onMounted, onBeforeUnmount } from "vue";
 import axios from "axios";
 
 const auth = usePage().props.auth;
-const users = usePage().props.users;
+const users = ref(usePage().props.users);
 const selectedUser = ref(null);
 const messages = ref([]);
 const newMessage = ref("");
+const audioCtx = ref(null);
+
+const playNotification = () => {
+    if (audioCtx.value === null) {
+        audioCtx.value = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    const ctx = audioCtx.value;
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(600, ctx.currentTime);
+    oscillator.start();
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.2);
+    oscillator.stop(ctx.currentTime + 0.2);
+};
 
 const fetchMessages = (user) => {
     axios.get(`/chat/messages/${user.id}`).then((res) => {
         messages.value = res.data;
+        const u = users.value.find((usr) => usr.id === user.id);
+        if (u) {
+            u.has_unread = false;
+        }
     });
 };
 
@@ -30,6 +51,11 @@ const sendMessage = () => {
         .then((res) => {
             messages.value.push(res.data);
             newMessage.value = "";
+            const u = users.value.find((usr) => usr.id === selectedUser.value.id);
+            if (u) {
+                u.last_message = res.data;
+                u.has_unread = false;
+            }
         });
 };
 
@@ -43,6 +69,26 @@ const connectWebSocket = () => {
                     e.message.receiver_id === selectedUser.value.id)
             ) {
                 messages.value.push(e.message);
+                if (e.message.sender_id !== auth.user.id) {
+                    playNotification();
+                }
+                const u = users.value.find((usr) => usr.id === selectedUser.value.id);
+                if (u) {
+                    u.last_message = e.message;
+                    u.has_unread = false;
+                }
+            }
+            const otherId =
+                e.message.sender_id === auth.user.id
+                    ? e.message.receiver_id
+                    : e.message.sender_id;
+            const otherUser = users.value.find((usr) => usr.id === otherId);
+            if (otherUser) {
+                otherUser.last_message = e.message;
+                if (otherUser.id !== selectedUser.value?.id && e.message.sender_id !== auth.user.id) {
+                    otherUser.has_unread = true;
+                    playNotification();
+                }
             }
         }
     );
@@ -73,6 +119,14 @@ onBeforeUnmount(() => {
                         <div class="w-12 h-12 bg-blue-200 rounded-full"></div>
                         <div class="ml-4">
                             <div class="font-semibold">{{ user.name }}</div>
+                            <div
+                                :class="['text-sm', user.has_unread ? 'font-bold' : 'text-gray-500']"
+                            >
+                                <span v-if="user.last_message">
+                                    <span v-if="user.last_message.sender_id === auth.user.id">You: </span>
+                                    {{ user.last_message.content }}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
