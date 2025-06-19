@@ -27,6 +27,10 @@ Route::get('/contacts', function () {
     return Inertia::render('Contacts', ['users' => $users]);
 })->middleware(['auth', 'verified'])->name('contacts');
 
+Route::get('/video-call', function () {
+    return Inertia::render('VideoCall');
+})->middleware(['auth', 'verified'])->name('video-call');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/chat', [ChatController::class, 'index'])->name('chat');
     Route::get('/chat/messages/{user}', [ChatController::class, 'messages']);
