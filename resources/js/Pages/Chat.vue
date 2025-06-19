@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import { Head, usePage } from "@inertiajs/vue3";
-import { ref, onMounted, onBeforeUnmount } from "vue";
+import { ref, onMounted, onBeforeUnmount, computed } from "vue";
 import axios from "axios";
 
 const auth = usePage().props.auth;
@@ -10,6 +10,29 @@ const selectedUser = ref(null);
 const messages = ref([]);
 const newMessage = ref("");
 const audioCtx = ref(null);
+
+const groupedMessages = computed(() => {
+    const result = [];
+    let lastDate = null;
+    messages.value.forEach((m) => {
+        const dt = new Date(m.created_at);
+        const dateLabel = dt.toLocaleDateString(undefined, {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+        });
+        const timeLabel = dt.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+        if (lastDate !== dateLabel) {
+            result.push({ type: "day", label: dateLabel });
+            lastDate = dateLabel;
+        }
+        result.push({ type: "msg", data: { ...m, time: timeLabel } });
+    });
+    return result;
+});
 
 const playNotification = () => {
     if (audioCtx.value === null) {
@@ -141,16 +164,31 @@ onBeforeUnmount(() => {
                         <div class="ml-4 font-bold flex-1">{{ selectedUser?.name }}</div>
                     </div>
                     <div class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
-                        <div v-for="(msg, i) in messages" :key="i" :class="msg.sender_id === auth.user.id ? 'text-right' : 'text-left'">
-                            <span
-                                :class="[
-                                    'inline-block px-3 py-2 rounded-lg',
-                                    msg.sender_id === auth.user.id
-                                        ? 'bg-blue-500 text-white'
-                                        : 'bg-white border',
-                                ]"
-                                >{{ msg.content }}</span
+                        <div v-for="(item, i) in groupedMessages" :key="i">
+                            <div v-if="item.type === 'day'" class="text-center text-gray-500 my-2 font-semibold">
+                                {{ item.label }}
+                            </div>
+                            <div
+                                v-else
+                                :class="item.data.sender_id === auth.user.id ? 'text-right' : 'text-left'"
                             >
+                                <div
+                                    :class="[
+                                        'inline-block px-3 py-2 rounded-lg',
+                                        item.data.sender_id === auth.user.id
+                                            ? 'bg-blue-500 text-white'
+                                            : 'bg-white border',
+                                    ]"
+                                >
+                                    {{ item.data.content }}
+                                    <div class="text-xs mt-1 flex items-center" :class="item.data.sender_id === auth.user.id ? 'justify-end' : 'justify-start'">
+                                        <span class="mr-1">{{ item.data.time }}</span>
+                                        <span v-if="item.data.sender_id === auth.user.id">
+                                            {{ item.data.is_seen ? 'Seen' : 'Sent' }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="p-4 border-t border-gray-200 flex space-x-2">
