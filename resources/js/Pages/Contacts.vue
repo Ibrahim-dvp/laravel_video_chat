@@ -317,6 +317,7 @@ const declineCall = () => {
                                     ref="remoteVideo"
                                     autoplay
                                     playsinline
+                                    muted
                                     class="border-2 border-gray-800 w-full h-full object-cover"
                                 ></video>
                                 <div class="absolute bottom-4 right-4 w-1/4 border-2 border-gray-800">
@@ -442,6 +443,23 @@ const declineCall = () => {
                                                 d="M3 15s2-2 9-2 9 2 9 2v3H3v-3z"
                                             />
                                         </svg>
+=======
+                                        class="px-3 py-2 rounded-full bg-gray-200 hover:bg-gray-300"
+                                    >
+                                        {{ isMuted ? 'Unmute' : 'Mute' }}
+                                    </button>
+                                    <button
+                                        @click="toggleCamera"
+                                        class="px-3 py-2 rounded-full bg-gray-200 hover:bg-gray-300"
+                                    >
+                                        {{ cameraOff ? 'Show' : 'Hide' }}
+                                    </button>
+                                    <button
+                                        @click="endCall"
+                                        class="px-3 py-2 rounded-full bg-red-500 text-white hover:bg-red-600"
+                                    >
+                                        End
+
                                     </button>
                                 </div>
                             </div>
