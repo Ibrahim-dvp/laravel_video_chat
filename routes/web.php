@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\VideoCallController;
+use App\Http\Controllers\ChatController;
 use App\Models\User;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Auth;
@@ -25,6 +26,12 @@ Route::get('/contacts', function () {
     $users = User::where('id', '!=', Auth::user()->id)->get();
     return Inertia::render('Contacts', ['users' => $users]);
 })->middleware(['auth', 'verified'])->name('contacts');
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/chat', [ChatController::class, 'index'])->name('chat');
+    Route::get('/chat/messages/{user}', [ChatController::class, 'messages']);
+    Route::post('/chat/messages/{user}', [ChatController::class, 'sendMessage']);
+});
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

@@ -43,6 +43,12 @@ const showingNavigationDropdown = ref(false);
                                 >
                                     Contacts
                                 </NavLink>
+                                <NavLink
+                                    :href="route('chat')"
+                                    :active="route().current('chat')"
+                                >
+                                    Chat
+                                </NavLink>
                             </div>
                         </div>
 
@@ -155,6 +161,12 @@ const showingNavigationDropdown = ref(false);
                             :active="route().current('contacts')"
                         >
                             Contacts
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('chat')"
+                            :active="route().current('chat')"
+                        >
+                            Chat
                         </ResponsiveNavLink>
                     </div>
 
