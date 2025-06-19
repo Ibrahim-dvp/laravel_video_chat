@@ -38,9 +38,18 @@ const callUser = () => {
 
 const endCall = () => {
     peerCall.value?.close();
+    // stop and release any active media tracks
     localStream.value?.getTracks().forEach((track) => track.stop());
-    remoteVideo.value = null;
-    localVideo.value = null;
+    if (localVideo.value?.srcObject) {
+        localVideo.value.srcObject.getTracks().forEach((t) => t.stop());
+        localVideo.value.srcObject = null;
+    }
+    if (remoteVideo.value?.srcObject) {
+        remoteVideo.value.srcObject.getTracks().forEach((t) => t.stop());
+        remoteVideo.value.srcObject = null;
+    }
+    localStream.value = null;
+    peerCall.value = null;
     isCalling.value = false;
     isMuted.value = false;
     cameraOff.value = false;
@@ -64,10 +73,44 @@ const toggleMic = () => {
     isMuted.value = !isMuted.value;
 };
 
-const toggleCamera = () => {
+const toggleCamera = async () => {
     if (!localStream.value) return;
-    localStream.value.getVideoTracks().forEach((t) => (t.enabled = !t.enabled));
     cameraOff.value = !cameraOff.value;
+
+    const videoSenders =
+        peerCall.value?.peerConnection
+            .getSenders()
+            .filter((s) => s.track && s.track.kind === "video") || [];
+
+    if (cameraOff.value) {
+        localStream.value.getVideoTracks().forEach((t) => {
+            t.enabled = false;
+            t.stop();
+            localStream.value.removeTrack(t);
+        });
+        videoSenders.forEach((sender) => sender.replaceTrack(null));
+    } else {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: false,
+            });
+            const newTrack = stream.getVideoTracks()[0];
+            localStream.value.addTrack(newTrack);
+            videoSenders.forEach((sender) => sender.replaceTrack(newTrack));
+
+            if (localVideo.value) {
+                const lvStream = localVideo.value.srcObject;
+                if (lvStream) {
+                    lvStream.addTrack(newTrack);
+                } else {
+                    localVideo.value.srcObject = new MediaStream([newTrack]);
+                }
+            }
+        } catch (err) {
+            console.error("Error toggling camera:", err);
+        }
+    }
 };
 
 const setSelectedUser = (user) => {
@@ -164,6 +207,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     window.Echo.leave(`video-call.${auth.user.id}`);
+    endCall();
 });
 
 const acceptCall = () => {
@@ -253,65 +297,154 @@ const declineCall = () => {
                     <!-- Contact Header -->
                     <div class="p-4 border-b border-gray-200 flex items-center">
                         <div class="w-12 h-12 bg-blue-200 rounded-full"></div>
-                        <div class="ml-4">
-                            <div class="font-bold">
-                                {{ selectedUser?.name }}
-                                <button
-                                    v-if="!isCalling"
-                                    @click="callUser"
-                                    class="ml-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                                >
-                                    Call
-                                </button>
-                                <template v-else>
-                                    <button
-                                        @click="toggleMic"
-                                        class="ml-4 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
-                                    >
-                                        {{ isMuted ? "Unmute" : "Mute" }}
-                                    </button>
-                                    <button
-                                        @click="toggleCamera"
-                                        class="ml-2 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
-                                    >
-                                        {{
-                                            cameraOff
-                                                ? "Show Camera"
-                                                : "Hide Camera"
-                                        }}
-                                    </button>
-                                    <button
-                                        @click="endCall"
-                                        class="ml-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                                    >
-                                        End Call
-                                    </button>
-                                </template>
-                            </div>
-                        </div>
+                        <div class="ml-4 font-bold flex-1">{{ selectedUser?.name }}</div>
+                        <button
+                            v-if="!isCalling"
+                            @click="callUser"
+                            class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                        >
+                            Call
+                        </button>
                     </div>
 
                     <div
                         class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 relative"
                     >
                         <template v-if="isCalling">
-                            <video
-                                id="remoteVideo"
-                                ref="remoteVideo"
-                                autoplay
-                                playsinline
-                                muted
-                                class="border-2 border-gray-800 w-full"
-                            ></video>
-                            <video
-                                id="localVideo"
-                                ref="localVideo"
-                                autoplay
-                                playsinline
-                                muted
-                                class="m-0 border-2 border-gray-800 absolute top-6 right-6 w-4/12"
-                                style="margin: 0"
-                            ></video>
+                            <div class="relative h-full w-full">
+                                <video
+                                    id="remoteVideo"
+                                    ref="remoteVideo"
+                                    autoplay
+                                    playsinline
+                                    class="border-2 border-gray-800 w-full h-full object-cover"
+                                ></video>
+                                <div class="absolute bottom-4 right-4 w-1/4 border-2 border-gray-800">
+                                    <video
+                                        id="localVideo"
+                                        ref="localVideo"
+                                        autoplay
+                                        playsinline
+                                        muted
+                                        class="w-full h-full object-cover"
+                                    ></video>
+                                    <div
+                                        v-if="cameraOff"
+                                        class="absolute inset-0 bg-black/60 text-white flex items-center justify-center text-sm"
+                                    >
+                                        Camera Off
+                                    </div>
+                                </div>
+                                <div
+                                    class="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-4 bg-white/70 rounded-lg p-2"
+                                >
+                                    <button
+                                        @click="toggleMic"
+                                        class="p-2 rounded-full bg-gray-200 hover:bg-gray-300"
+                                    >
+                                        <svg
+                                            v-if="!isMuted"
+                                            class="h-6 w-6"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M12 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3zm5 9a5 5 0 01-10 0m5 5v4m-4 0h8"
+                                            />
+                                        </svg>
+                                        <svg
+                                            v-else
+                                            class="h-6 w-6"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M15 10v1a3 3 0 01-3 3m-3-3V5a3 3 0 016 0v4m6 6l-6-6m-6 0L3 3m9 13v5m-4 0h8"
+                                            />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        @click="toggleCamera"
+                                        class="p-2 rounded-full bg-gray-200 hover:bg-gray-300"
+                                    >
+                                        <svg
+                                            v-if="!cameraOff"
+                                            class="h-6 w-6"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14V10z"
+                                            />
+                                            <rect
+                                                x="3"
+                                                y="6"
+                                                width="12"
+                                                height="12"
+                                                rx="2"
+                                                ry="2"
+                                            />
+                                        </svg>
+                                        <svg
+                                            v-else
+                                            class="h-6 w-6"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M3 3l18 18M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14V10z"
+                                            />
+                                            <rect
+                                                x="3"
+                                                y="6"
+                                                width="12"
+                                                height="12"
+                                                rx="2"
+                                                ry="2"
+                                            />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        @click="endCall"
+                                        class="p-2 rounded-full bg-red-500 text-white hover:bg-red-600"
+                                    >
+                                        <svg
+                                            class="h-6 w-6"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M3 15s2-2 9-2 9 2 9 2v3H3v-3z"
+                                            />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
                         </template>
                         <div
                             v-if="!isCalling"
