@@ -13,6 +13,7 @@ class ChatMessage extends Model
         'sender_id',
         'receiver_id',
         'content',
+        'is_seen',
     ];
 
     public function sender()
