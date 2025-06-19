@@ -297,7 +297,9 @@ const declineCall = () => {
                     <!-- Contact Header -->
                     <div class="p-4 border-b border-gray-200 flex items-center">
                         <div class="w-12 h-12 bg-blue-200 rounded-full"></div>
-                        <div class="ml-4 font-bold flex-1">{{ selectedUser?.name }}</div>
+                        <div class="ml-4 font-bold flex-1">
+                            {{ selectedUser?.name }}
+                        </div>
                         <button
                             v-if="!isCalling"
                             @click="callUser"
@@ -320,7 +322,9 @@ const declineCall = () => {
                                     muted
                                     class="border-2 border-gray-800 w-full h-full object-cover"
                                 ></video>
-                                <div class="absolute bottom-4 right-4 w-1/4 border-2 border-gray-800">
+                                <div
+                                    class="absolute bottom-4 right-4 w-1/4 border-2 border-gray-800"
+                                >
                                     <video
                                         id="localVideo"
                                         ref="localVideo"
@@ -443,23 +447,22 @@ const declineCall = () => {
                                                 d="M3 15s2-2 9-2 9 2 9 2v3H3v-3z"
                                             />
                                         </svg>
-=======
-                                        class="px-3 py-2 rounded-full bg-gray-200 hover:bg-gray-300"
-                                    >
-                                        {{ isMuted ? 'Unmute' : 'Mute' }}
+                                        <!-- ======= -->
+                                        <!-- class="px-3 py-2 rounded-full bg-gray-200 hover:bg-gray-300" -->
+                                        >
+                                        {{ isMuted ? "Unmute" : "Mute" }}
                                     </button>
                                     <button
                                         @click="toggleCamera"
                                         class="px-3 py-2 rounded-full bg-gray-200 hover:bg-gray-300"
                                     >
-                                        {{ cameraOff ? 'Show' : 'Hide' }}
+                                        {{ cameraOff ? "Show" : "Hide" }}
                                     </button>
                                     <button
                                         @click="endCall"
                                         class="px-3 py-2 rounded-full bg-red-500 text-white hover:bg-red-600"
                                     >
                                         End
-
                                     </button>
                                 </div>
                             </div>
