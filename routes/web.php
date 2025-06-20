@@ -28,7 +28,8 @@ Route::get('/contacts', function () {
 })->middleware(['auth', 'verified'])->name('contacts');
 
 Route::get('/video-call', function () {
-    return Inertia::render('VideoCall');
+    $users = User::where('id', '!=', Auth::user()->id)->get();
+    return Inertia::render('VideoCall', ['users' => $users]);
 })->middleware(['auth', 'verified'])->name('video-call');
 
 Route::middleware(['auth', 'verified'])->group(function () {
